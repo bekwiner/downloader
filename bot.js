@@ -1,65 +1,82 @@
+import "dotenv/config";
 import { Telegraf } from "telegraf";
 import { request } from "undici";
-import dotenv from "dotenv";
 
-dotenv.config();
+const bot = new Telegraf(process.env.BOT_TOKEN);
 
-const BOT_TOKEN = process.env.BOT_TOKEN;
-const FASTSAVER_TOKEN = process.env.FASTSAVER_TOKEN;
-const BOT_USERNAME = process.env.BOT_USERNAME; // masalan: @bekzod_downloader_bot
-
-if (!BOT_TOKEN || !FASTSAVER_TOKEN || !BOT_USERNAME) {
-  console.error("❌ BOT_TOKEN, FASTSAVER_TOKEN yoki BOT_USERNAME .env faylda yo‘q");
-  process.exit(1);
+async function fetchApi(url) {
+  try {
+    const { statusCode, body } = await request(url);
+    if (statusCode !== 200) return null;
+    return await body.json();
+  } catch (err) {
+    console.error("API error:", err);
+    return null;
+  }
 }
 
-const bot = new Telegraf(BOT_TOKEN);
-
-bot.start((ctx) => {
-  ctx.reply("👋 Salom! Menga faqat video link yuboring (YouTube, TikTok, Instagram — post, reels, story). Men uni yuklab beraman 📥");
-});
+bot.start((ctx) =>
+  ctx.reply("👋 Salom! Menga YouTube, Instagram yoki TikTok link yuboring, men esa yuklab beraman 🚀")
+);
 
 bot.on("text", async (ctx) => {
-  const url = ctx.message.text.trim();
+  const link = ctx.message.text.trim();
 
   try {
-    // YouTube bo‘lsa alohida download endpoint ishlatiladi
-    if (url.includes("youtube.com") || url.includes("youtu.be")) {
-      const videoId = url.split("v=")[1] || url.split("/").pop();
-      const apiUrl = `https://fastsaverapi.com/download?video_id=${videoId}&format=720p&bot_username=${BOT_USERNAME}&token=${FASTSAVER_TOKEN}`;
+    // === YouTube ===
+    if (link.includes("youtube.com") || link.includes("youtu.be")) {
+      let videoId;
 
-      const { body } = await request(apiUrl);
-      const data = JSON.parse(await body.text());
-
-      console.log("📥 YouTube API javob:", data);
-
-      if (data.error || !data.file_id) {
-        return ctx.reply("❌ YouTube video topilmadi yoki qo‘llab-quvvatlanmaydi.");
+      // Shorts yoki oddiy videoni ajratish
+      if (link.includes("shorts/")) {
+        videoId = link.split("shorts/")[1].split("?")[0];
+      } else if (link.includes("v=")) {
+        videoId = link.split("v=")[1].split("&")[0];
+      } else {
+        videoId = link.split("/").pop().split("?")[0];
       }
 
-      return ctx.replyWithVideo(data.file_id, { caption: data.title || "📥 Yuklab olindi" });
+      const apiUrl = `https://fastsaverapi.com/download?video_id=${videoId}&format=720p&bot_username=@${process.env.BOT_USERNAME}&token=${process.env.FASTSAVER_TOKEN}`;
+      const data = await fetchApi(apiUrl);
+
+      console.log("YouTube API javobi:", data);
+
+      if (!data || data.error || !data.file_id) {   
+        return ctx.reply("❌ YouTube yuklab bo‘lmadi.");
+      }
+
+      return ctx.replyWithVideo(data.file_id, {
+        caption: "✅ YouTube video yuklab olindi!",
+      });
     }
 
-    // Instagram, TikTok va boshqalar uchun get-info ishlatiladi
-    const { body } = await request(
-      `https://fastsaverapi.com/get-info?url=${encodeURIComponent(url)}&token=${FASTSAVER_TOKEN}`
-    );
+    // === Boshqa platformalar (Instagram, TikTok, Facebook va h.k.) ===
+    else {
+      const apiUrl = `https://fastsaverapi.com/get-info?url=${encodeURIComponent(link)}&token=${process.env.FASTSAVER_TOKEN}`;
+      const data = await fetchApi(apiUrl);
 
-    const data = JSON.parse(await body.text());
-    console.log("📥 API javob:", data);
+      console.log("Get-Info API javobi:", data);
 
-    if (data.error || !data.download_url) {
-      return ctx.reply("❌ Video yoki story topilmadi yoki qo‘llab-quvvatlanmaydi.");
+      if (!data || data.error || !data.download_url) {
+        return ctx.reply("❌ Yuklab bo‘lmadi.");
+      }
+
+      // Media turi
+      if (data.type === "video") {
+        return ctx.replyWithVideo(data.download_url, {
+          caption: "✅ Video yuklab olindi!",
+        });
+      } else if (data.type === "image") {
+        return ctx.replyWithPhoto(data.download_url, {
+          caption: "✅ Rasm yuklab olindi!",
+        });
+      } else {
+        return ctx.reply("❌ Ushbu fayl turi qo‘llab-quvvatlanmaydi.");
+      }
     }
-
-    // Story/Reels/Video farqi yo‘q → hammasini video sifatida yuboramiz
-    await ctx.replyWithVideo(data.download_url, {
-      caption: data.caption || "📥 Yuklab olindi",
-    });
-
   } catch (err) {
-    console.error(err);
-    ctx.reply("❌ Xatolik yuz berdi. Keyinroq urinib ko‘ring.");
+    console.error("Bot error:", err);
+    return ctx.reply("❌ Xatolik yuz berdi, qaytadan urinib ko‘ring.");
   }
 });
 
