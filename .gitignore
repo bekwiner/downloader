@@ -1,0 +1,14 @@
+# Node.js dependency katalogi
+node_modules/
+
+# Atrof-muhit o‘zgaruvchilari (API token va shaxsiy ma’lumotlar)
+.env
+
+# Agar log fayllar bo‘lsa
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# MacOS va Windows fayllari
+.DS_Store
+Thumbs.db
