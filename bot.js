@@ -1,9 +1,11 @@
+// bot.js
 import "dotenv/config";
 import { Telegraf } from "telegraf";
 import { request } from "undici";
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
 
+// === API chaqirish funksiyasi ===
 async function fetchApi(url) {
   try {
     const { statusCode, body } = await request(url);
@@ -15,15 +17,22 @@ async function fetchApi(url) {
   }
 }
 
+// === /start komandasi ===
 bot.start((ctx) =>
-  ctx.reply("👋 Salom! Menga YouTube, Instagram yoki TikTok link yuboring, men esa yuklab beraman 🚀")
+  ctx.reply(
+    "👋 Salom! Menga YouTube, Instagram yoki TikTok link yuboring, men esa yuklab beraman 🚀"
+  )
 );
 
+// === Asosiy handler ===
 bot.on("text", async (ctx) => {
   const link = ctx.message.text.trim();
 
+  // link emas bo‘lsa chiqib ketamiz
+  if (!link.includes("http")) return;
+
   try {
-    // === YouTube ===
+    // === YouTube yuklash ===
     if (link.includes("youtube.com") || link.includes("youtu.be")) {
       let videoId;
 
@@ -42,14 +51,12 @@ bot.on("text", async (ctx) => {
         return ctx.reply("❌ YouTube yuklab bo‘lmadi.");
       }
 
-      // file_id bo‘lsa
       if (data.file_id) {
         return ctx.replyWithVideo(data.file_id, {
           caption: "✅ YouTube video yuklab olindi!",
         });
       }
 
-      // medias massiv bo‘lsa
       if (data.medias && Array.isArray(data.medias)) {
         for (const media of data.medias) {
           if (media.type === "video" && media.url) {
@@ -75,13 +82,12 @@ bot.on("text", async (ctx) => {
         return ctx.reply("❌ Yuklab bo‘lmadi.");
       }
 
-      // === Agar medias massiv bo‘lsa (album, stories va h.k.) ===
+      // Album, stories va h.k.
       if (data.medias && Array.isArray(data.medias)) {
         for (const media of data.medias) {
           if (media.type === "video" && media.download_url) {
             await ctx.replyWithVideo(media.download_url, {
               caption: "✅ Video yuklab olindi!",
-              thumbnail: media.thumb || undefined,
             });
           } else if (media.type === "image" && media.download_url) {
             await ctx.replyWithPhoto(media.download_url, {
@@ -92,7 +98,7 @@ bot.on("text", async (ctx) => {
         return;
       }
 
-      // === Oddiy rasm yoki video ===
+      // Oddiy video yoki rasm
       if (data.download_url) {
         if (data.type === "video") {
           return ctx.replyWithVideo(data.download_url, {
@@ -113,5 +119,6 @@ bot.on("text", async (ctx) => {
   }
 });
 
+// === Botni ishga tushirish ===
 bot.launch();
 console.log("✅ Bot ishga tushdi!");
